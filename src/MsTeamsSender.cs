@@ -35,7 +35,7 @@ public class MsTeamsSender : IMsTeamsSender
         // I wonder if we can get away without re-serializing
         string jsonContent = JsonUtil.Serialize(message.MsTeamsCard, libraryType: JsonLibraryType.Newtonsoft)!;
 
-        if (!_configuration.GetValue<bool>("MsTeams:Enable"))
+        if (!_configuration.GetValue<bool>("MsTeams:Enabled"))
         {
             _logger.LogWarning("MS Teams has been disabled, skipping message: {message}", jsonContent);
             return false;
