@@ -17,7 +17,7 @@ using System.Threading.Tasks;
 namespace Soenneker.MsTeams.Sender;
 
 ///<inheritdoc cref="IMsTeamsSender"/>
-public class MsTeamsSender : IMsTeamsSender
+public sealed class MsTeamsSender : IMsTeamsSender
 {
     private readonly ILogger<MsTeamsSender> _logger;
     private readonly IConfiguration _configuration;
@@ -74,15 +74,11 @@ public class MsTeamsSender : IMsTeamsSender
 
     public ValueTask DisposeAsync()
     {
-        GC.SuppressFinalize(this);
-
         return _httpClientCache.Remove(nameof(MsTeamsSender));
     }
 
     public void Dispose()
     {
-        GC.SuppressFinalize(this);
-
         _httpClientCache.RemoveSync(nameof(MsTeamsSender));
     }
 }
