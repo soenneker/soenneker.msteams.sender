@@ -13,6 +13,7 @@ using System.Net.Http;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
+using Soenneker.Dtos.MsTeams.Card;
 
 namespace Soenneker.MsTeams.Sender;
 
@@ -30,10 +31,15 @@ public sealed class MsTeamsSender : IMsTeamsSender
         _httpClientCache = httpClientCache;
     }
 
-    public async Task<bool> SendWebhook(MsTeamsMessage message, CancellationToken cancellationToken = default)
+    public Task<bool> SendMessage(MsTeamsMessage message, CancellationToken cancellationToken = default)
+    {
+        return SendCard(message.MsTeamsCard, message.Channel, cancellationToken);
+    }
+
+    public async Task<bool> SendCard(MsTeamsCard card, string channel, CancellationToken cancellationToken = default)
     {
         // I wonder if we can get away without re-serializing
-        string jsonContent = JsonUtil.Serialize(message.MsTeamsCard, libraryType: JsonLibraryType.Newtonsoft)!;
+        string jsonContent = JsonUtil.Serialize(card, libraryType: JsonLibraryType.Newtonsoft)!;
 
         if (!_configuration.GetValue<bool>("MsTeams:Enabled"))
         {
@@ -43,7 +49,7 @@ public sealed class MsTeamsSender : IMsTeamsSender
 
         var content = new StringContent(jsonContent, Encoding.UTF8, "application/json");
 
-        var webhookUrl = _configuration.GetValueStrict<string>($"MsTeams:{message.Channel}:WebhookUrl");
+        var webhookUrl = _configuration.GetValueStrict<string>($"MsTeams:{channel}:WebhookUrl");
 
         HttpResponseMessage result = await (await _httpClientCache.Get(nameof(MsTeamsSender), cancellationToken: cancellationToken).NoSync())
                                            .PostAsync(webhookUrl, content, cancellationToken)
@@ -70,15 +76,5 @@ public sealed class MsTeamsSender : IMsTeamsSender
 
         _logger.LogError("Error sending MS Teams Notification ({code}): {response}", result.StatusCode, responseContent);
         return false;
-    }
-
-    public ValueTask DisposeAsync()
-    {
-        return _httpClientCache.Remove(nameof(MsTeamsSender));
-    }
-
-    public void Dispose()
-    {
-        _httpClientCache.RemoveSync(nameof(MsTeamsSender));
     }
 }
