@@ -44,7 +44,7 @@
     <ItemGroup>
         <PackageReference Include="Hangfire.Core" Version="1.8.20" />
         <PackageReference Include="Soenneker.Extensions.Configuration" Version="3.0.701" />
-        <PackageReference Include="Soenneker.Messages.MsTeams" Version="3.0.138" />
+        <PackageReference Include="Soenneker.Messages.MsTeams" Version="3.0.139" />
         <PackageReference Include="Soenneker.Utils.HttpClientCache" Version="3.0.1709" />
         <PackageReference Include="Soenneker.Utils.Json" Version="3.0.2332" />
     </ItemGroup>
