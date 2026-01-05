@@ -1,5 +1,6 @@
 ﻿using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
+using Soenneker.Dtos.MsTeams.Card;
 using Soenneker.Enums.JsonLibrary;
 using Soenneker.Extensions.Configuration;
 using Soenneker.Extensions.Task;
@@ -9,11 +10,12 @@ using Soenneker.MsTeams.Sender.Abstract;
 using Soenneker.Utils.HttpClientCache.Abstract;
 using Soenneker.Utils.Json;
 using System;
+using System.Collections.Concurrent;
+using System.Net;
 using System.Net.Http;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
-using Soenneker.Dtos.MsTeams.Card;
 
 namespace Soenneker.MsTeams.Sender;
 
@@ -24,6 +26,8 @@ public sealed class MsTeamsSender : IMsTeamsSender
     private readonly IConfiguration _configuration;
     private readonly IHttpClientCache _httpClientCache;
 
+    private readonly ConcurrentDictionary<string, string> _webhookUrlByChannel = new(StringComparer.Ordinal);
+
     public MsTeamsSender(IConfiguration configuration, ILogger<MsTeamsSender> logger, IHttpClientCache httpClientCache)
     {
         _configuration = configuration;
@@ -31,50 +35,54 @@ public sealed class MsTeamsSender : IMsTeamsSender
         _httpClientCache = httpClientCache;
     }
 
-    public Task<bool> SendMessage(MsTeamsMessage message, CancellationToken cancellationToken = default)
-    {
-        return SendCard(message.MsTeamsCard, message.Channel, cancellationToken);
-    }
+    public Task<bool> SendMessage(MsTeamsMessage message, CancellationToken cancellationToken = default) =>
+        SendCard(message.MsTeamsCard, message.Channel, cancellationToken);
 
     public async Task<bool> SendCard(MsTeamsCard card, string channel, CancellationToken cancellationToken = default)
     {
-        // I wonder if we can get away without re-serializing
-        string jsonContent = JsonUtil.Serialize(card, libraryType: JsonLibraryType.Newtonsoft)!;
-
         if (!_configuration.GetValue<bool>("MsTeams:Enabled"))
         {
-            _logger.LogWarning("MS Teams has been disabled, skipping message: {message}", jsonContent);
+            _logger.LogWarning("MS Teams has been disabled, skipping message for channel {channel}", channel);
             return false;
         }
 
-        var content = new StringContent(jsonContent, Encoding.UTF8, "application/json");
+        string webhookUrl = _webhookUrlByChannel.GetOrAdd(channel, static (ch, config) => config.GetValueStrict<string>("MsTeams:" + ch + ":WebhookUrl"),
+            _configuration);
 
-        var webhookUrl = _configuration.GetValueStrict<string>($"MsTeams:{channel}:WebhookUrl");
+        string jsonContent = JsonUtil.Serialize(card, libraryType: JsonLibraryType.Newtonsoft)!;
 
-        HttpResponseMessage result = await (await _httpClientCache.Get(nameof(MsTeamsSender), cancellationToken: cancellationToken).NoSync())
-                                           .PostAsync(webhookUrl, content, cancellationToken)
-                                           .NoSync();
+        using var content = new StringContent(jsonContent, Encoding.UTF8, "application/json");
 
-        return await IsSuccessfulSend(result, cancellationToken).NoSync();
+        HttpClient client = await _httpClientCache.Get(nameof(MsTeamsSender), cancellationToken: cancellationToken)
+                                                  .NoSync();
+
+        using HttpResponseMessage response = await client.PostAsync(webhookUrl, content, cancellationToken)
+                                                         .NoSync();
+
+        return await IsSuccessfulSend(response, cancellationToken)
+            .NoSync();
     }
 
-    // https://docs.microsoft.com/en-us/microsoftteams/platform/webhooks-and-connectors/how-to/connectors-using?tabs=cURL#rate-limiting-for-connectors
-    private async ValueTask<bool> IsSuccessfulSend(HttpResponseMessage result, CancellationToken cancellationToken = default)
+    private async ValueTask<bool> IsSuccessfulSend(HttpResponseMessage response, CancellationToken cancellationToken = default)
     {
-        // TODO: polly retry, exp backoff
+        if (response.IsSuccessStatusCode)
+            return true;
 
-        string responseContent = await result.Content.ReadAsStringAsync(cancellationToken).NoSync();
-
-        if (responseContent.Contains("Microsoft Teams endpoint returned HTTP error 429"))
+        if (response.StatusCode == (HttpStatusCode)429)
         {
-            _logger.LogError("MS Teams is rate limiting... {response}", responseContent);
+            string body = await response.Content.ReadAsStringAsync(cancellationToken)
+                                        .NoSync();
+
+            _logger.LogError("MS Teams is rate limiting (429). Response: {response}", body);
+
             throw new Exception("MS Teams is rate limiting");
         }
 
-        if (result.IsSuccessStatusCode && responseContent == "1")
-            return true;
+        string responseContent = await response.Content.ReadAsStringAsync(cancellationToken)
+                                               .NoSync();
 
-        _logger.LogError("Error sending MS Teams Notification ({code}): {response}", result.StatusCode, responseContent);
+        _logger.LogError("Error sending MS Teams Notification ({code}): {response}", response.StatusCode, responseContent);
+
         return false;
     }
 }
