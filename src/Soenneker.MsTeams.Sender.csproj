@@ -45,6 +45,6 @@
         <PackageReference Include="Soenneker.Extensions.Configuration" Version="4.0.772" />
         <PackageReference Include="Soenneker.Messages.MsTeams" Version="4.0.238" />
         <PackageReference Include="Soenneker.Utils.HttpClientCache" Version="4.0.1852" />
-        <PackageReference Include="Soenneker.Utils.Json" Version="4.0.2412" />
+        <PackageReference Include="Soenneker.Utils.Json" Version="4.0.2414" />
     </ItemGroup>
 </Project>
