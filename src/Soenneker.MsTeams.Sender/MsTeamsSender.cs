@@ -19,7 +19,7 @@ using System.Threading.Tasks;
 
 namespace Soenneker.MsTeams.Sender;
 
-///<inheritdoc cref="IMsTeamsSender"/>
+/// <inheritdoc cref="IMsTeamsSender"/>
 public sealed class MsTeamsSender : IMsTeamsSender
 {
     private readonly ILogger<MsTeamsSender> _logger;
