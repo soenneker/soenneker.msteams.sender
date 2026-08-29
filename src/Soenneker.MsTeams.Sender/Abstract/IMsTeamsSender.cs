@@ -14,18 +14,18 @@ public interface IMsTeamsSender
     /// <summary>
     /// Sends message.
     /// </summary>
-    /// <param name="message">The message.</param>
-    /// <param name="cancellationToken">The cancellation token.</param>
-    /// <returns>A task containing the result of the operation.</returns>
+    /// <param name="message">Message content to send.</param>
+    /// <param name="cancellationToken">Token used to cancel the operation.</param>
+    /// <returns>true if sends message; otherwise, false.</returns>
     [AutomaticRetry(Attempts = 0)]
     Task<bool> SendMessage(MsTeamsMessage message, CancellationToken cancellationToken = default);
 
     /// <summary>
     /// Sends card.
     /// </summary>
-    /// <param name="card">The card.</param>
-    /// <param name="channel">The channel.</param>
-    /// <param name="cancellationToken">The cancellation token.</param>
-    /// <returns>A task containing the result of the operation.</returns>
+    /// <param name="card">Element used to host the card input.</param>
+    /// <param name="channel">Delivery channel used to send the card.</param>
+    /// <param name="cancellationToken">Token used to cancel the operation.</param>
+    /// <returns>true if sends card; otherwise, false.</returns>
     Task<bool> SendCard(MsTeamsCard card, string channel, CancellationToken cancellationToken = default);
 }
