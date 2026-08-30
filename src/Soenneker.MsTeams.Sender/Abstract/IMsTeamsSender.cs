@@ -16,7 +16,7 @@ public interface IMsTeamsSender
     /// </summary>
     /// <param name="message">Message content to send.</param>
     /// <param name="cancellationToken">Token used to cancel the operation.</param>
-    /// <returns>true if sends message; otherwise, false.</returns>
+    /// <returns><see langword="true"/> when Teams accepts the message; otherwise, <see langword="false"/>.</returns>
     [AutomaticRetry(Attempts = 0)]
     Task<bool> SendMessage(MsTeamsMessage message, CancellationToken cancellationToken = default);
 
@@ -26,6 +26,6 @@ public interface IMsTeamsSender
     /// <param name="card">Element used to host the card input.</param>
     /// <param name="channel">Delivery channel used to send the card.</param>
     /// <param name="cancellationToken">Token used to cancel the operation.</param>
-    /// <returns>true if sends card; otherwise, false.</returns>
+    /// <returns><see langword="true"/> when Teams accepts the card; otherwise, <see langword="false"/>.</returns>
     Task<bool> SendCard(MsTeamsCard card, string channel, CancellationToken cancellationToken = default);
 }

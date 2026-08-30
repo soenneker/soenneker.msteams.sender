@@ -19,7 +19,6 @@ using System.Threading.Tasks;
 
 namespace Soenneker.MsTeams.Sender;
 
-/// <inheritdoc cref="IMsTeamsSender"/>
 public sealed class MsTeamsSender : IMsTeamsSender
 {
     private readonly ILogger<MsTeamsSender> _logger;
@@ -46,8 +45,7 @@ public sealed class MsTeamsSender : IMsTeamsSender
             return false;
         }
 
-        string webhookUrl = _webhookUrlByChannel.GetOrAdd(channel, static (ch, config) => config.GetValueStrict<string>("MsTeams:" + ch + ":WebhookUrl"),
-            _configuration);
+        string webhookUrl = _webhookUrlByChannel.GetOrAdd(channel, static (ch, config) => ResolveWebhookUrl(ch, config), _configuration);
 
         string jsonContent = JsonUtil.Serialize(card, libraryType: JsonLibraryType.Newtonsoft)!;
 
@@ -59,30 +57,35 @@ public sealed class MsTeamsSender : IMsTeamsSender
         using HttpResponseMessage response = await client.PostAsync(webhookUrl, content, cancellationToken)
                                                          .NoSync();
 
-        return await IsSuccessfulSend(response, cancellationToken)
+        return await IsSuccessfulSend(response)
             .NoSync();
     }
 
-    private async ValueTask<bool> IsSuccessfulSend(HttpResponseMessage response, CancellationToken cancellationToken = default)
+    private ValueTask<bool> IsSuccessfulSend(HttpResponseMessage response)
     {
         if (response.IsSuccessStatusCode)
-            return true;
+            return ValueTask.FromResult(true);
 
         if (response.StatusCode == (HttpStatusCode)429)
         {
-            string body = await response.Content.ReadAsStringAsync(cancellationToken)
-                                        .NoSync();
-
-            _logger.LogError("MS Teams is rate limiting (429). Response: {response}", body);
-
-            throw new Exception("MS Teams is rate limiting");
+            _logger.LogWarning("MS Teams rejected the notification because the webhook is rate limited (429)");
+            return ValueTask.FromResult(false);
         }
 
-        string responseContent = await response.Content.ReadAsStringAsync(cancellationToken)
-                                               .NoSync();
+        _logger.LogError("MS Teams notification failed with status code {StatusCode}", response.StatusCode);
+        return ValueTask.FromResult(false);
+    }
 
-        _logger.LogError("Error sending MS Teams Notification ({code}): {response}", response.StatusCode, responseContent);
+    private static string ResolveWebhookUrl(string channel, IConfiguration configuration)
+    {
+        if (channel.Contains(':', StringComparison.Ordinal))
+            throw new InvalidOperationException("MS Teams channel names cannot contain configuration path separators.");
 
-        return false;
+        string value = configuration.GetValueStrict<string>($"MsTeams:{channel}:WebhookUrl");
+
+        if (!Uri.TryCreate(value, UriKind.Absolute, out Uri? uri) || uri.Scheme != Uri.UriSchemeHttps)
+            throw new InvalidOperationException($"The MS Teams webhook configured for channel '{channel}' must be an absolute HTTPS URL.");
+
+        return uri.AbsoluteUri;
     }
 }

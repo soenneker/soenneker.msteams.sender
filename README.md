@@ -1,44 +1,62 @@
+# Soenneker.MsTeams.Sender
 [![](https://img.shields.io/nuget/v/soenneker.msteams.sender.svg?style=for-the-badge)](https://www.nuget.org/packages/soenneker.msteams.sender/)
 [![](https://img.shields.io/github/actions/workflow/status/soenneker/soenneker.msteams.sender/publish-package.yml?style=for-the-badge)](https://github.com/soenneker/soenneker.msteams.sender/actions/workflows/publish-package.yml)
 [![](https://img.shields.io/nuget/dt/soenneker.msteams.sender.svg?style=for-the-badge)](https://www.nuget.org/packages/soenneker.msteams.sender/)
 [![](https://img.shields.io/github/actions/workflow/status/soenneker/soenneker.msteams.sender/codeql.yml?label=CodeQL&style=for-the-badge)](https://github.com/soenneker/soenneker.msteams.sender/actions/workflows/codeql.yml)
 
-# Soenneker.MsTeams.Sender
+Routes Adaptive Card payloads to named Microsoft Teams HTTPS webhooks.
 
-A utility that sends Adaptive Card messages to Microsoft Teams via configured webhooks, handling channel routing, logging, and error responses including rate-limiting.
-
-## Install
+## Installation
 
 ```bash
 dotnet add package Soenneker.MsTeams.Sender
 ```
 
-## Quick start
+## Configuration
+
+Configure the feature switch and one webhook per logical channel:
+
+```json
+{
+  "MsTeams": {
+    "Enabled": true,
+    "EngineeringAlerts": {
+      "WebhookUrl": "https://example.webhook.office.com/webhookb2/..."
+    }
+  }
+}
+```
+
+The webhook must be an absolute HTTPS URL. Treat it as a credential: keep it in a secret provider, do not commit it to source control, and do not include it in logs. Channel names cannot contain `:`.
+
+## Registration
+
+Choose the sender lifetime that matches how webhook configuration is refreshed:
 
 ```csharp
 using Soenneker.MsTeams.Sender.Registrars;
-using Microsoft.Extensions.DependencyInjection;
 
-var services = new ServiceCollection();
-var result = services.AddMsTeamsSenderAsSingleton();
+builder.Services.AddMsTeamsSenderAsSingleton();
+// or: builder.Services.AddMsTeamsSenderAsScoped();
 ```
 
-Adds `IMsTeamsSender` as a singleton service.
+Both registrations keep the underlying HTTP client cache singleton. A scoped sender can be discarded while the shared client remains available. Each sender caches the first webhook URL resolved for a channel, so a singleton sender requires an application restart to pick up a changed URL; a scoped sender resolves it again in a new scope. The `MsTeams:Enabled` switch is read on every send.
 
-## What you get
+## Send a card
 
-- `IMsTeamsSender` — A utility that sends Adaptive Card messages to Microsoft Teams via configured webhooks, handling channel routing, logging, and error responses including rate-limiting.
-- `MsTeamsSenderRegistrar` — A utility that sends Adaptive Card messages to Microsoft Teams via configured webhooks, handling channel routing, logging, and error responses including rate-limiting.
+```csharp
+using Soenneker.Dtos.MsTeams.Card;
+using Soenneker.MsTeams.Sender.Abstract;
 
-## API at a glance
+public sealed class DeploymentNotifier(IMsTeamsSender teams)
+{
+    public Task<bool> Notify(MsTeamsCard card, CancellationToken cancellationToken) =>
+        teams.SendCard(card, "EngineeringAlerts", cancellationToken);
+}
+```
 
-| API | What it does | Result / important behavior |
-| --- | --- | --- |
-| `IMsTeamsSender.SendMessage(message, cancellationToken)` | Sends message. | true if sends message; otherwise, false. |
-| `IMsTeamsSender.SendCard(card, channel, cancellationToken)` | Sends card. | true if sends card; otherwise, false. |
-| `MsTeamsSenderRegistrar.AddMsTeamsSenderAsSingleton(services)` | Adds `IMsTeamsSender` as a singleton service. | The same service collection, so additional registrations can be chained. |
-| `MsTeamsSenderRegistrar.AddMsTeamsSenderAsScoped(services)` | Adds `IMsTeamsSender` as a scoped service. | The same service collection, so additional registrations can be chained. |
+`SendMessage` accepts a `MsTeamsMessage` and reads its `MsTeamsCard` and `Channel` fields. `SendCard` sends the card directly.
 
-## Practical notes
+The methods return `true` only for a successful HTTP status. Disabled sending, rate limiting (`429`), and other non-success responses return `false` and are logged without response bodies. Configuration errors, serialization failures, transport errors, and cancellation are surfaced as exceptions.
 
-- Cancellation stops pending work; it does not undo work that has already completed.
+`SendMessage` disables Hangfire automatic retries through its interface attribute. If delivery must be retried, define an explicit policy that accounts for duplicate webhook delivery and the `false` result.
