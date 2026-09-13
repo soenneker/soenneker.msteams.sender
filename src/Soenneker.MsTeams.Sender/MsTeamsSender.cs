@@ -1,4 +1,4 @@
-﻿using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using Soenneker.Dtos.MsTeams.Card;
 using Soenneker.Enums.JsonLibrary;
@@ -19,7 +19,6 @@ using System.Threading.Tasks;
 
 namespace Soenneker.MsTeams.Sender;
 
-/// <inheritdoc cref="IMsTeamsSender" />
 public sealed class MsTeamsSender : IMsTeamsSender
 {
     private readonly ILogger<MsTeamsSender> _logger;
@@ -50,31 +49,33 @@ public sealed class MsTeamsSender : IMsTeamsSender
 
         string jsonContent = JsonUtil.Serialize(card, libraryType: JsonLibraryType.Newtonsoft)!;
 
-        using var content = new StringContent(jsonContent, Encoding.UTF8, "application/json");
+        using var request = new HttpRequestMessage(HttpMethod.Post, webhookUrl)
+        {
+            Content = new StringContent(jsonContent, Encoding.UTF8, "application/json")
+        };
 
         HttpClient client = await _httpClientCache.Get(nameof(MsTeamsSender), cancellationToken: cancellationToken)
                                                   .NoSync();
 
-        using HttpResponseMessage response = await client.PostAsync(webhookUrl, content, cancellationToken)
+        using HttpResponseMessage response = await client.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cancellationToken)
                                                          .NoSync();
 
-        return await IsSuccessfulSend(response)
-            .NoSync();
+        return IsSuccessfulSend(response);
     }
 
-    private ValueTask<bool> IsSuccessfulSend(HttpResponseMessage response)
+    private bool IsSuccessfulSend(HttpResponseMessage response)
     {
         if (response.IsSuccessStatusCode)
-            return ValueTask.FromResult(true);
+            return true;
 
         if (response.StatusCode == (HttpStatusCode)429)
         {
             _logger.LogWarning("MS Teams rejected the notification because the webhook is rate limited (429)");
-            return ValueTask.FromResult(false);
+            return false;
         }
 
         _logger.LogError("MS Teams notification failed with status code {StatusCode}", response.StatusCode);
-        return ValueTask.FromResult(false);
+        return false;
     }
 
     private static string ResolveWebhookUrl(string channel, IConfiguration configuration)
