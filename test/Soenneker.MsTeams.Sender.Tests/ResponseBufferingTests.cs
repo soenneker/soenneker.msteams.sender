@@ -29,7 +29,17 @@ public class ResponseBufferingTests
             ["MsTeams:Enabled"] = "true", ["MsTeams:audit:WebhookUrl"] = "https://audit.invalid/webhook"
         }).Build();
         var sender = new Soenneker.MsTeams.Sender.MsTeamsSender(config, NullLogger<Soenneker.MsTeams.Sender.MsTeamsSender>.Instance, cache);
-        bool result = await sender.SendCard(new Soenneker.Dtos.MsTeams.Card.MsTeamsCard(), "audit");
+        var card = new Soenneker.Dtos.MsTeams.Card.MsTeamsCard
+        {
+            Attachments =
+            [
+                new Soenneker.Dtos.AdaptiveCard.Attachments.AdaptiveCardAttachments(
+                    Soenneker.Utils.Json.JsonUtil.Deserialize(
+                        """{"type":"AdaptiveCard","version":"1.2","msteams":{"width":"Full"},"body":[{"type":"TextBlock","text":"Hello","wrap":false}]}""",
+                        Soenneker.AdaptiveCards.Dtos.SchemaJsonContext.Default.AdaptiveCard)!)
+            ]
+        };
+        bool result = await sender.SendCard(card, "audit");
         Check(result == expected && body.Disposed, "HTTP status handling or response disposal changed");
     }
     public class HttpCacheProxy : System.Reflection.DispatchProxy
@@ -39,10 +49,15 @@ public class ResponseBufferingTests
     }
     private sealed class ResponseHandler(UnreadableContent body, int status) : System.Net.Http.HttpMessageHandler
     {
-        protected override Task<System.Net.Http.HttpResponseMessage> SendAsync(System.Net.Http.HttpRequestMessage request, CancellationToken cancellationToken)
+        protected override async Task<System.Net.Http.HttpResponseMessage> SendAsync(System.Net.Http.HttpRequestMessage request, CancellationToken cancellationToken)
         {
             Check(request.Method == System.Net.Http.HttpMethod.Post && request.Content!.Headers.ContentType!.MediaType == "application/json", "HTTP request changed");
-            return Task.FromResult(new System.Net.Http.HttpResponseMessage((System.Net.HttpStatusCode)status) { Content = body });
+            using var payload = System.Text.Json.JsonDocument.Parse(await request.Content!.ReadAsStringAsync(cancellationToken));
+            var content = payload.RootElement.GetProperty("attachments")[0].GetProperty("content");
+            Check(content.GetProperty("body")[0].GetProperty("text").GetString() == "Hello"
+                && !content.GetProperty("body")[0].GetProperty("wrap").GetBoolean()
+                && content.GetProperty("msteams").GetProperty("width").GetString() == "Full", "Generated card payload changed");
+            return new System.Net.Http.HttpResponseMessage((System.Net.HttpStatusCode)status) { Content = body };
         }
     }
     private sealed class UnreadableContent : System.Net.Http.HttpContent

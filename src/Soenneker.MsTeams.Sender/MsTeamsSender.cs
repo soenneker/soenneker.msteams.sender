@@ -1,7 +1,6 @@
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using Soenneker.Dtos.MsTeams.Card;
-using Soenneker.Enums.JsonLibrary;
 using Soenneker.Extensions.Configuration;
 using Soenneker.Extensions.Task;
 using Soenneker.Extensions.ValueTask;
@@ -47,7 +46,7 @@ public sealed class MsTeamsSender : IMsTeamsSender
 
         string webhookUrl = _webhookUrlByChannel.GetOrAdd(channel, static (ch, config) => ResolveWebhookUrl(ch, config), _configuration);
 
-        string jsonContent = JsonUtil.Serialize(card, libraryType: JsonLibraryType.Newtonsoft)!;
+        string jsonContent = JsonUtil.Serialize(card, MsTeamsJsonContext.Default.MsTeamsCard);
 
         using var request = new HttpRequestMessage(HttpMethod.Post, webhookUrl)
         {
