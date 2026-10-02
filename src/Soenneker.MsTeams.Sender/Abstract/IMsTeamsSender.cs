@@ -1,5 +1,4 @@
-﻿using Hangfire;
-using Soenneker.Dtos.MsTeams.Card;
+﻿using Soenneker.Dtos.MsTeams.Card;
 using Soenneker.Messages.MsTeams;
 using System.Threading;
 using System.Threading.Tasks;
@@ -17,7 +16,6 @@ public interface IMsTeamsSender
     /// <param name="message">Message content to send.</param>
     /// <param name="cancellationToken">Token used to cancel the operation.</param>
     /// <returns><see langword="true"/> when Teams accepts the message; otherwise, <see langword="false"/>.</returns>
-    [AutomaticRetry(Attempts = 0)]
     Task<bool> SendMessage(MsTeamsMessage message, CancellationToken cancellationToken = default);
 
     /// <summary>
