@@ -18,7 +18,7 @@ public class ResponseBufferingTests
     [Arguments(200, true)]
     [Arguments(429, false)]
     [Arguments(500, false)]
-    public async ValueTask TeamsSendDoesNotBufferUnusedResponseBody(int status, bool expected)
+    public async ValueTask TeamsSendDoesNotBufferUnusedResponseBody(int status, bool expected, CancellationToken cancellationToken)
     {
         var body = new UnreadableContent();
         using var http = new System.Net.Http.HttpClient(new ResponseHandler(body, status));
@@ -39,7 +39,7 @@ public class ResponseBufferingTests
                         Soenneker.AdaptiveCards.Dtos.SchemaJsonContext.Default.AdaptiveCard)!)
             ]
         };
-        bool result = await sender.SendCard(card, "audit");
+        bool result = await sender.SendCard(card, "audit", cancellationToken: cancellationToken);
         Check(result == expected && body.Disposed, "HTTP status handling or response disposal changed");
     }
     public class HttpCacheProxy : System.Reflection.DispatchProxy
