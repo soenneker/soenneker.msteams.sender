@@ -80,7 +80,7 @@ public sealed class MsTeamsSender : IMsTeamsSender
         if (channel.Contains(':', StringComparison.Ordinal))
             throw new InvalidOperationException("MS Teams channel names cannot contain configuration path separators.");
 
-        var value = configuration.GetValueStrict<string>($"MsTeams:{channel}:WebhookUrl");
+        var value = configuration.GetStringStrict($"MsTeams:{channel}:WebhookUrl");
 
         if (!Uri.TryCreate(value, UriKind.Absolute, out Uri? uri) || uri.Scheme != Uri.UriSchemeHttps)
             throw new InvalidOperationException($"The MS Teams webhook configured for channel '{channel}' must be an absolute HTTPS URL.");
